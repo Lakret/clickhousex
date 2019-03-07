@@ -70,7 +70,7 @@ defmodule Clickhousex.Protocol do
     query = %Clickhousex.Query{name: "ping", statement: "SELECT 1"}
 
     case do_query(query, [], [], state) do
-      {:ok, _, new_state} -> {:ok, new_state}
+      {:ok, _query, _result, new_state} -> {:ok, new_state}
       {:error, reason, new_state} -> {:disconnect, reason, new_state}
       other -> other
     end
@@ -103,7 +103,7 @@ defmodule Clickhousex.Protocol do
 
   @doc false
   @spec handle_execute(query, list, opts :: Keyword.t(), state) ::
-          {:ok, result, state}
+          {:ok, query, result, state}
           | {:error | :disconnect, Exception.t(), state}
   def handle_execute(query, params, opts, state) do
     do_query(query, params, opts, state)
