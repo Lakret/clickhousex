@@ -17,7 +17,10 @@ defmodule Clickhousex.Protocol do
   @type result :: Clickhousex.Result.t()
   @type cursor :: any
 
+  # Callbacks
+
   @doc false
+  @impl DBConnection
   @spec connect(opts :: Keyword.t()) ::
           {:ok, state}
           | {:error, Exception.t()}
@@ -56,12 +59,14 @@ defmodule Clickhousex.Protocol do
   end
 
   @doc false
+  @impl DBConnection
   @spec disconnect(err :: Exception.t(), state) :: :ok
   def disconnect(_err, _state) do
     :ok
   end
 
   @doc false
+  @impl DBConnection
   @spec ping(state) ::
           {:ok, state}
           | {:disconnect, term, state}
@@ -76,19 +81,14 @@ defmodule Clickhousex.Protocol do
   end
 
   @doc false
-  @spec reconnect(new_opts :: Keyword.t(), state) :: {:ok, state}
-  def reconnect(new_opts, state) do
-    with :ok <- disconnect("Reconnecting", state),
-         do: connect(new_opts)
-  end
-
-  @doc false
+  @impl DBConnection
   @spec checkin(state) :: {:ok, state}
   def checkin(state) do
     {:ok, state}
   end
 
   @doc false
+  @impl DBConnection
   @spec checkout(state) :: {:ok, state}
   def checkout(state) do
     {:ok, state}
@@ -102,12 +102,84 @@ defmodule Clickhousex.Protocol do
   end
 
   @doc false
+  @impl DBConnection
   @spec handle_execute(query, list, opts :: Keyword.t(), state) ::
           {:ok, query, result, state}
           | {:error | :disconnect, Exception.t(), state}
   def handle_execute(query, params, opts, state) do
     do_query(query, params, opts, state)
   end
+
+  @doc false
+  @impl DBConnection
+  @spec handle_begin(opts :: Keyword.t(), state) :: {:ok, result, state}
+  def handle_begin(_opts, state) do
+    {:ok, %Clickhousex.Result{}, state}
+  end
+
+  @doc false
+  @impl DBConnection
+  @spec handle_close(query, Keyword.t(), state) :: {:ok, result, state}
+  def handle_close(_query, _opts, state) do
+    {:ok, %Clickhousex.Result{}, state}
+  end
+
+  @doc false
+  @impl DBConnection
+  @spec handle_commit(opts :: Keyword.t(), state) :: {:ok, result, state}
+  def handle_commit(_opts, state) do
+    {:ok, %Clickhousex.Result{}, state}
+  end
+
+  @doc false
+  @spec handle_info(opts :: Keyword.t(), state) :: {:ok, result, state}
+  def handle_info(_opts, state) do
+    {:ok, state}
+  end
+
+  @doc false
+  @impl DBConnection
+  @spec handle_rollback(opts :: Keyword.t(), state) :: {:ok, result, state}
+  def handle_rollback(_opts, state) do
+    {:ok, %Clickhousex.Result{}, state}
+  end
+
+  # TODO:
+
+  defmodule NotImplementedError do
+    defexception [:message]
+  end
+
+  @impl DBConnection
+  def handle_deallocate(_query, _cursor, _opts, state) do
+    {:error, %NotImplementedError{message: "handle_deallocate/4 is not yet implemented"}, state}
+  end
+
+  @impl DBConnection
+  def handle_declare(_query, _params, _opts, state) do
+    {:error, %NotImplementedError{message: "handle_declare/4 is not yet implemented"}, state}
+  end
+
+  @impl DBConnection
+  def handle_fetch(_query, _cursor, _opts, state) do
+    {:error, %NotImplementedError{message: "handle_fetch/4 is not yet implemented"}, state}
+  end
+
+  @impl DBConnection
+  def handle_status(_opts, state) do
+    {:idle, state}
+  end
+
+  # Public API
+
+  @doc false
+  @spec reconnect(new_opts :: Keyword.t(), state) :: {:ok, state}
+  def reconnect(new_opts, state) do
+    with :ok <- disconnect("Reconnecting", state),
+         do: connect(new_opts)
+  end
+
+  # Helpers
 
   defp do_query(query, params, _opts, state) do
     base_address = state.base_address
@@ -171,43 +243,10 @@ defmodule Clickhousex.Protocol do
     end
   end
 
-  @doc false
-  defp handle_errors({:error, reason}), do: {:error, Error.exception(reason)}
-  defp handle_errors(term), do: term
-
-  @doc false
-  @spec handle_begin(opts :: Keyword.t(), state) :: {:ok, result, state}
-  def handle_begin(_opts, state) do
-    {:ok, %Clickhousex.Result{}, state}
-  end
-
-  @doc false
-  @spec handle_close(query, Keyword.t(), state) :: {:ok, result, state}
-  def handle_close(_query, _opts, state) do
-    {:ok, %Clickhousex.Result{}, state}
-  end
-
-  @doc false
-  @spec handle_commit(opts :: Keyword.t(), state) :: {:ok, result, state}
-  def handle_commit(_opts, state) do
-    {:ok, %Clickhousex.Result{}, state}
-  end
-
-  @doc false
-  @spec handle_info(opts :: Keyword.t(), state) :: {:ok, result, state}
-  def handle_info(_opts, state) do
-    {:ok, state}
-  end
-
-  @doc false
-  @spec handle_rollback(opts :: Keyword.t(), state) :: {:ok, result, state}
-  def handle_rollback(_opts, state) do
-    {:ok, %Clickhousex.Result{}, state}
-  end
-
-  ## Private functions
-
   defp build_base_address(scheme, hostname, port) do
     "#{Atom.to_string(scheme)}://#{hostname}:#{port}/"
   end
+
+  defp handle_errors({:error, reason}), do: {:error, Error.exception(reason)}
+  defp handle_errors(term), do: term
 end
