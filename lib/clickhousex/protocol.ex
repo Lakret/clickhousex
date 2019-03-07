@@ -1,6 +1,5 @@
 defmodule Clickhousex.Protocol do
   @moduledoc false
-
   use DBConnection
 
   alias Clickhousex.HTTPClient, as: Client
@@ -11,7 +10,7 @@ defmodule Clickhousex.Protocol do
 
   @type state :: %__MODULE__{
           conn_opts: Keyword.t(),
-          base_address: string()
+          base_address: String.t()
         }
 
   @type query :: Clickhousex.Query.t()
@@ -58,7 +57,7 @@ defmodule Clickhousex.Protocol do
 
   @doc false
   @spec disconnect(err :: Exception.t(), state) :: :ok
-  def disconnect(_err, state) do
+  def disconnect(_err, _state) do
     :ok
   end
 
@@ -96,6 +95,7 @@ defmodule Clickhousex.Protocol do
   end
 
   @doc false
+  @impl DBConnection
   @spec handle_prepare(query, Keyword.t(), state) :: {:ok, query, state}
   def handle_prepare(query, _, state) do
     {:ok, query, state}
@@ -183,7 +183,7 @@ defmodule Clickhousex.Protocol do
 
   @doc false
   @spec handle_close(query, Keyword.t(), state) :: {:ok, result, state}
-  def handle_close(query, _opts, state) do
+  def handle_close(_query, _opts, state) do
     {:ok, %Clickhousex.Result{}, state}
   end
 

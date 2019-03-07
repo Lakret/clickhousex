@@ -11,8 +11,8 @@ defmodule Clickhousex.HTTPClient do
     send_p(query, base_address, database, opts)
   end
 
-  def send(query, base_address, timeout, username, password, database) when username == nil do
-    send_p(query, base_address, database, [timeout: timeout, recv_timeout: timeout])
+  def send(query, base_address, timeout, username, _password, database) when username == nil do
+    send_p(query, base_address, database, timeout: timeout, recv_timeout: timeout)
   end
 
   defp send_p(query, base_address, database, opts) do
@@ -21,6 +21,7 @@ defmodule Clickhousex.HTTPClient do
     opts_new = opts ++ [params: %{database: database}]
 
     res = HTTPoison.request(:post, base_address, query_normalized, @req_headers, opts_new)
+
     case res do
       {:ok, resp} ->
         cond do
@@ -29,23 +30,32 @@ defmodule Clickhousex.HTTPClient do
               :selected ->
                 case Poison.decode(resp.body) do
                   {:ok, %{"meta" => meta, "data" => data, "rows" => _rows_count}} ->
-                    columns = meta |> Enum.map(fn(%{"name" => name, "type" => _type}) -> name end)
-                    rows = data |> Enum.map(fn(data_row) ->
-                      meta
-                      |> Enum.map(fn(%{"name" => column, "type" => column_type}) ->
-                        Types.decode(data_row[column], column_type)
+                    columns = meta |> Enum.map(fn %{"name" => name, "type" => _type} -> name end)
+
+                    rows =
+                      data
+                      |> Enum.map(fn data_row ->
+                        meta
+                        |> Enum.map(fn %{"name" => column, "type" => column_type} ->
+                          Types.decode(data_row[column], column_type)
+                        end)
+                        |> List.to_tuple()
                       end)
-                      |> List.to_tuple()
-                    end)
+
                     {command, columns, rows}
-                  {:error, reason} -> {:error, reason}
+
+                  {:error, reason} ->
+                    {:error, reason}
                 end
+
               :updated ->
                 {:updated, 1}
             end
+
           true ->
             {:error, resp.body}
         end
+
       {:error, error} ->
         {:error, error.reason}
     end
