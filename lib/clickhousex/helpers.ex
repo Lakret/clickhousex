@@ -8,6 +8,8 @@ defmodule Clickhousex.Helpers do
   end
 
   @doc false
+  def bind_query_params(query, []), do: query
+
   def bind_query_params(query, params) do
     query_parts = String.split(query, "?")
 
