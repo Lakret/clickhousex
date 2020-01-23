@@ -38,8 +38,7 @@ defimpl DBConnection.Query, for: Clickhousex.Query do
   def decode(_query, result, _opts) do
     case result.command do
       :selected ->
-        new_rows = Enum.map(result.rows, &Tuple.to_list/1)
-        Map.put(result, :rows, new_rows)
+        Map.put(result, :rows, result.rows)
 
       _ ->
         result
