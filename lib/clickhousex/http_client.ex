@@ -34,7 +34,7 @@ defmodule Clickhousex.HTTPClient do
                       data
                       |> Enum.map(fn data_row ->
                         meta
-                        |> Enum.map(fn %{"name" => column, "type" => _column_type} ->
+                        |> Enum.map(fn %{"name" => column} ->
                           data_row[column]
                         end)
                       end)
