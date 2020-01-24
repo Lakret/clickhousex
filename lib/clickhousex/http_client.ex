@@ -1,8 +1,6 @@
 defmodule Clickhousex.HTTPClient do
   @moduledoc false
 
-  alias Clickhousex.Types
-
   @selected_queries_regex ~r/^(SELECT|SHOW|DESCRIBE|EXISTS)/i
   @req_headers [{"Content-Type", "text/plain"}]
 
@@ -36,10 +34,9 @@ defmodule Clickhousex.HTTPClient do
                       data
                       |> Enum.map(fn data_row ->
                         meta
-                        |> Enum.map(fn %{"name" => column, "type" => column_type} ->
-                          Types.decode(data_row[column], column_type)
+                        |> Enum.map(fn %{"name" => column} ->
+                          data_row[column]
                         end)
-                        |> List.to_tuple()
                       end)
 
                     {command, columns, rows}
