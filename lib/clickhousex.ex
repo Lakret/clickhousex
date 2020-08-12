@@ -49,12 +49,14 @@ defmodule Clickhousex do
     DBConnection.child_spec(Clickhousex.Protocol, opts)
   end
 
-  @spec query(conn(), binary(), list, Keyword.t()) :: {:ok, iodata(), Clickhousex.Result.t()}
+  @spec query(conn(), binary(), list, Keyword.t()) ::
+          {:ok, iodata(), Clickhousex.Result.t()} | {:error, any()}
   def query(conn, statement, params, opts \\ []) do
     DBConnection.prepare_execute(conn, %Query{name: "", statement: statement}, params, opts)
   end
 
-  @spec query!(conn(), binary(), list, Keyword.t()) :: {iodata(), Clickhousex.Result.t()}
+  @spec query!(conn(), binary(), list, Keyword.t()) ::
+          {iodata(), Clickhousex.Result.t()} | no_return()
   def query!(conn, statement, params, opts \\ []) do
     DBConnection.prepare_execute!(conn, %Query{name: "", statement: statement}, params, opts)
   end
