@@ -67,9 +67,7 @@ defmodule Clickhousex.Protocol do
 
   @doc false
   @impl DBConnection
-  @spec ping(state) ::
-          {:ok, state}
-          | {:disconnect, term, state}
+  @spec ping(state) :: {:ok, state} | {:disconnect, Exception.t(), state}
   def ping(state) do
     query = %Clickhousex.Query{name: "ping", statement: "SELECT 1"}
 
@@ -132,7 +130,7 @@ defmodule Clickhousex.Protocol do
   end
 
   @doc false
-  @spec handle_info(opts :: Keyword.t(), state) :: {:ok, result, state}
+  @spec handle_info(opts :: Keyword.t(), state) :: {:ok, state}
   def handle_info(_opts, state) do
     {:ok, state}
   end
@@ -175,7 +173,7 @@ defmodule Clickhousex.Protocol do
   @doc false
   @spec reconnect(new_opts :: Keyword.t(), state) :: {:ok, state}
   def reconnect(new_opts, state) do
-    with :ok <- disconnect("Reconnecting", state),
+    with :ok <- disconnect(%RuntimeError{message: "Reconnecting"}, state),
          do: connect(new_opts)
   end
 
@@ -224,19 +222,6 @@ defmodule Clickhousex.Protocol do
             columns: ["count"],
             rows: [[count]],
             num_rows: 1
-          },
-          state
-        }
-
-      {command, columns, rows} ->
-        {
-          :ok,
-          query,
-          %Clickhousex.Result{
-            command: command,
-            columns: columns,
-            rows: rows,
-            num_rows: Enum.count(rows)
           },
           state
         }
