@@ -7,7 +7,6 @@ defmodule Clickhousex do
   for queries, connection backoff, logging, pooling and
   more.
   """
-
   alias Clickhousex.Query
 
   @typedoc """
@@ -16,7 +15,7 @@ defmodule Clickhousex do
   A connection reference is used when making multiple requests to the same
   connection, see `transaction/3`.
   """
-  @type conn :: DBConnection.conn
+  @type conn :: DBConnection.conn()
 
   @timeout 60_000
   def timeout(), do: @timeout
@@ -40,24 +39,24 @@ defmodule Clickhousex do
           * default value: empty
   """
 
-  @spec start_link(Keyword.t) :: {:ok, pid} | {:error, term}
+  @spec start_link(Keyword.t()) :: {:ok, pid} | {:error, term}
   def start_link(opts) do
     DBConnection.start_link(Clickhousex.Protocol, opts)
   end
 
-  @spec child_spec(Keyword.t) :: Supervisor.Spec.spec
+  @spec child_spec(Keyword.t()) :: Supervisor.Spec.spec()
   def child_spec(opts) do
     DBConnection.child_spec(Clickhousex.Protocol, opts)
   end
 
-  @spec query(pid(), binary(), list, Keyword.t) ::
-          {:ok, iodata(), Clickhousex.Result.t}
+  @spec query(conn(), iodata(), list, Keyword.t()) ::
+          {:ok, iodata(), Clickhousex.Result.t()} | {:error, any()}
   def query(conn, statement, params, opts \\ []) do
     DBConnection.prepare_execute(conn, %Query{name: "", statement: statement}, params, opts)
   end
 
-  @spec query!(pid(), binary(), list, Keyword.t) ::
-          {iodata(), Clickhousex.Result.t}
+  @spec query!(conn(), iodata(), list, Keyword.t()) ::
+          {iodata(), Clickhousex.Result.t()} | no_return()
   def query!(conn, statement, params, opts \\ []) do
     DBConnection.prepare_execute!(conn, %Query{name: "", statement: statement}, params, opts)
   end

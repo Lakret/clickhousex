@@ -76,7 +76,7 @@ defmodule Clickhousex.Helpers do
       {:ok, ndt} ->
         "'#{NaiveDateTime.to_iso8601(ndt)}'"
 
-      {:error} ->
+      {:error, _reason} ->
         {:error, %Clickhousex.Error{message: :wrong_date_time}}
     end
   end
@@ -86,7 +86,7 @@ defmodule Clickhousex.Helpers do
       {:ok, date} ->
         "'#{Date.to_string(date)}'"
 
-      {:error} ->
+      {:error, _reason} ->
         {:error, %Clickhousex.Error{message: :wrong_date}}
     end
   end

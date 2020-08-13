@@ -4,11 +4,16 @@ defmodule Clickhousex.Mixfile do
   def project do
     [
       app: :clickhousex,
-      version: "0.2.5",
+      version: "0.2.6",
       elixir: "~> 1.5",
       deps: deps(),
       package: package(),
-      source_url: "https://github.com/appodeal/clickhousex"
+      source_url: "https://github.com/appodeal/clickhousex",
+      dialyzer: [
+        plt_add_deps: :transitive,
+        plt_add_apps: [:mix],
+        ignore_warnings: ".dialyzer_ignore.exs"
+      ]
     ]
   end
 
@@ -25,7 +30,8 @@ defmodule Clickhousex.Mixfile do
       {:db_connection, "~> 2.0"},
       {:httpoison, "~> 1.0"},
       {:poison, ">= 1.0.0"},
-      {:ex_doc, "~> 0.19", only: :dev}
+      {:ex_doc, "~> 0.19", only: :dev},
+      {:dialyxir, "~> 1.0", runtime: false}
     ]
   end
 
