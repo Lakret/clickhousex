@@ -5,7 +5,7 @@ defmodule Clickhousex.Query do
 
   @type t :: %__MODULE__{
           name: iodata,
-          type: :select | :insert | :alter | :create | :drop,
+          type: :select | :insert | :alter | :create | :drop | :show,
           param_count: integer,
           params: iodata | nil,
           column_count: integer | nil,
@@ -38,6 +38,7 @@ defimpl DBConnection.Query, for: Clickhousex.Query do
   @select_query_regex ~r/\bSELECT\b/i
   @insert_query_regex ~r/\bINSERT\b/i
   @alter_query_regex ~r/\bALTER\b/i
+  @show_query_regex ~r/\bSHOW\b/i
 
   @codec Application.get_env(:clickhousex, :codec, Clickhousex.Codec.JSON)
 
@@ -82,7 +83,8 @@ defimpl DBConnection.Query, for: Clickhousex.Query do
 
   def encode(query, _params, _opts) do
     HTTPRequest.new()
-    |> HTTPRequest.with_query_string_data(query.statement)
+    |> HTTPRequest.with_post_data(query.statement)
+    |> HTTPRequest.with_query_in_body()
   end
 
   def decode(_query, result, _opts) do
@@ -109,7 +111,8 @@ defimpl DBConnection.Query, for: Clickhousex.Query do
          {:insert_select, false} <- {:insert_select, Regex.match?(@insert_select_query_regex, statement)},
          {:select, false} <- {:select, Regex.match?(@select_query_regex, statement)},
          {:insert, false} <- {:insert, Regex.match?(@insert_query_regex, statement)},
-         {:alter, false} <- {:alter, Regex.match?(@alter_query_regex, statement)} do
+         {:alter, false} <- {:alter, Regex.match?(@alter_query_regex, statement)},
+         {:show, false} <- {:show, Regex.match?(@show_query_regex, statement)} do
       :unknown
     else
       {statement_type, true} ->

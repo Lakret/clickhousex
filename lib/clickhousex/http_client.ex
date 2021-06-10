@@ -55,6 +55,8 @@ defmodule Clickhousex.HTTPClient do
   alias Clickhousex.Query
   @moduledoc false
 
+  @format_response [:select, :show]
+
   @req_headers [{"Content-Type", "text/plain"}]
 
   def connect(scheme, host, port) do
@@ -78,10 +80,16 @@ defmodule Clickhousex.HTTPClient do
     sql_query = maybe_append_format(query, request.post_data) |> IO.iodata_to_binary()
 
     parameters =
-      Enum.reduce(request.query_params, %{}, fn {name, value}, acc ->
-        param_name = "param_" <> name
-        Map.put(acc, param_name, value)
-      end)
+      case request.query_params do
+        nil ->
+          %{}
+
+        params ->
+          Enum.reduce(params, %{}, fn {name, value}, acc ->
+            param_name = "param_" <> name
+            Map.put(acc, param_name, value)
+          end)
+      end
 
     query_string =
       %{database: database}
@@ -121,7 +129,7 @@ defmodule Clickhousex.HTTPClient do
     end
   end
 
-  defp decode_response(conn, %Query{type: :select}, %Response{} = response) do
+  defp decode_response(conn, %Query{type: type}, %Response{} = response) when type in @format_response do
     case Response.decode(response) do
       {:ok, %{column_names: columns, rows: rows}} -> {:ok, conn, {:selected, columns, rows}}
       {:error, error} -> {:error, conn, error.reason}
@@ -171,7 +179,7 @@ defmodule Clickhousex.HTTPClient do
     end
   end
 
-  defp maybe_append_format(%Query{type: :select}, request) do
+  defp maybe_append_format(%Query{type: type}, request) when type in @format_response do
     [request, " FORMAT ", Response.format()]
   end
 
