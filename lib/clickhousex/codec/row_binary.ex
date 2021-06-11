@@ -7,7 +7,7 @@ defmodule Clickhousex.Codec.RowBinary do
        config :clickhousex, codec: Clickhousex.Codec.RowBinary
 
   """
-  alias Clickhousex.{Codec, Codec.Binary.Extractor, Codec.RowBinary.Utils}
+  alias Clickhousex.{Codec, Codec.Binary.Extractor, Codec.RowBinary.Utils, Codec.Binary}
   import Utils
   use Extractor
 
@@ -28,15 +28,7 @@ defmodule Clickhousex.Codec.RowBinary do
   end
 
   @impl Codec
-  def encode(query, replacements, params) do
-    params =
-      Enum.map(params, fn
-        %DateTime{} = dt -> DateTime.to_unix(dt)
-        other -> other
-      end)
-
-    Codec.Values.encode(query, replacements, params)
-  end
+  defdelegate encode(query, params, opts), to: Codec.Values
 
   @impl Codec
   def decode(state(column_names: column_names, rows: rows, count: count)) do
@@ -136,6 +128,44 @@ defmodule Clickhousex.Codec.RowBinary do
     end
   end
 
+  # precision defines the number of sub-second digits
+  defp extract_field(<<data::binary>>, {:datetime64, precision} = _datetime64, types, row, state)
+       when is_integer(precision) do
+    {:ok, unix_timestamp, rest} = Binary.decode(data, :i64)
+
+    timestamp =
+      cond do
+        precision <= 9 ->
+          exponent = 9 - precision
+          unix_timestamp * trunc(:math.pow(10, exponent))
+
+        true ->
+          exponent = precision - 9
+          div(unix_timestamp, trunc(:math.pow(10, exponent)))
+      end
+
+    elixir_timestamp = timestamp |> DateTime.from_unix!(:nanosecond) |> DateTime.to_naive()
+    extract_row(rest, types, [elixir_timestamp | row], state)
+  end
+
+  defp extract_field(<<data::binary>>, {:nullable, {:datetime64, precision}} = _datetime64, types, row, state) do
+    case Binary.decode(data, :u8) do
+      {:ok, 1, rest} ->
+        extract_row(rest, types, [nil | row], state)
+
+      {:ok, 0, rest} ->
+        extract_field(rest, {:datetime64, precision}, types, row, state)
+    end
+  end
+
+  defp extract_field(<<0, rest::binary>>, {:nullable, :nothing}, types, row, state) do
+    extract_row(rest, types, [nil | row], state)
+  end
+
+  defp extract_field(<<1, rest::binary>>, {:nullable, :nothing}, types, row, state) do
+    extract_row(rest, types, [nil | row], state)
+  end
+
   @scalar_types [
     :i64,
     :i32,
@@ -208,6 +238,20 @@ defmodule Clickhousex.Codec.RowBinary do
       |> parse_type()
 
     {:array, rest_type}
+  end
+
+  defp parse_type(<<"DateTime64(", rest::binary>>) do
+    case Integer.parse(rest) do
+      {length, rest} ->
+        rest
+        |> String.replace_suffix(")", "")
+
+        {:datetime64, length}
+    end
+  end
+
+  defp parse_type("Nothing") do
+    :nothing
   end
 
   # Boolean isn't represented below because clickhouse has no concept

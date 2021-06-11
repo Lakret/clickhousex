@@ -158,7 +158,6 @@ defmodule Clickhousex.Codec.Binary.Extractor do
   # `vars` are varint parts, from high to low
   defp varint_decoding([_ | _] = vars) do
     vars
-    |> Enum.reverse()
     |> Enum.with_index()
     |> Enum.map(fn
       {var, 0} -> var
@@ -365,19 +364,21 @@ defmodule Clickhousex.Codec.Binary.Extractor do
 
       # Value extractors
 
-      # Empty string optimization, prevents concatenating large data to an empty string and
-      # reallocating the large data
-      def unquote(extractor_name)(<<>>, unquote_splicing(extractor_args), unquote(length_variable)) do
-        {:resume, &unquote(extractor_name)(&1, unquote_splicing(extractor_args), unquote(length_variable))}
-      end
-
       def unquote(extractor_name)(<<rest::binary>>, unquote_splicing(extractor_args), unquote(length_variable)) do
         case rest do
           <<unquote(value_arg)::binary-size(unquote(length_variable)), rest::binary>> ->
             unquote(landing_call)
 
           _ ->
-            {:resume, &unquote(extractor_name)(rest <> &1, unquote_splicing(extractor_args), unquote(length_variable))}
+            extractor_fun =
+              case rest do
+                # Empty string optimization, prevents concatenating large data to an empty string and
+                # reallocating the large data
+                <<>> -> &unquote(extractor_name)(&1, unquote_splicing(extractor_args), unquote(length_variable))
+                _ -> &unquote(extractor_name)(rest <> &1, unquote_splicing(extractor_args), unquote(length_variable))
+              end
+
+            {:resume, extractor_fun}
         end
       end
 

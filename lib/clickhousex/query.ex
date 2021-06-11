@@ -5,9 +5,10 @@ defmodule Clickhousex.Query do
 
   @type t :: %__MODULE__{
           name: iodata,
-          type: :select | :insert | :alter | :create | :drop,
+          type: :select | :insert | :alter | :create | :drop | :show,
           param_count: integer,
           params: iodata | nil,
+          column_count: integer | nil,
           columns: [String.t()] | nil
         }
 
@@ -15,7 +16,8 @@ defmodule Clickhousex.Query do
             statement: "",
             type: :select,
             params: [],
-            param_count: 0,
+            param_count: nil,
+            column_count: 0,
             columns: []
 
   def new(statement) do
@@ -26,12 +28,17 @@ end
 
 defimpl DBConnection.Query, for: Clickhousex.Query do
   alias Clickhousex.HTTPRequest
+  alias Clickhousex.Codec.Values
+  alias Clickhousex.Utils
 
   @values_regex ~r/VALUES/i
+  @values_parameter_regex ~r/^(\((\?,)*\?\),)*(\((\?,)*\?\))$/
   @create_query_regex ~r/\bCREATE\b/i
+  @insert_select_query_regex ~r/\bINSERT\b.*\bSELECT\b/is
   @select_query_regex ~r/\bSELECT\b/i
   @insert_query_regex ~r/\bINSERT\b/i
   @alter_query_regex ~r/\bALTER\b/i
+  @show_query_regex ~r/\bSHOW\b/i
 
   @codec Application.get_env(:clickhousex, :codec, Clickhousex.Codec.JSON)
 
@@ -50,21 +57,34 @@ defimpl DBConnection.Query, for: Clickhousex.Query do
     query
   end
 
-  def encode(%{type: :insert} = query, params, _opts) do
-    {query_part, post_body_part} = do_parse(query)
-    encoded_params = @codec.encode(query, post_body_part, params)
+  def encode(%{type: :insert, param_count: param_count} = query, params, opts)
+      when is_integer(param_count) and param_count > 0 do
+    opts = Utils.default_query_opts(opts)
+    {query_part, values_part} = do_parse(query)
+    query = column_count(query, values_part)
+    check_parameter_count(query, params)
+    encoded_params = @codec.encode(query, params, opts)
 
     HTTPRequest.new()
     |> HTTPRequest.with_query_string_data(query_part)
     |> HTTPRequest.with_post_data(encoded_params)
   end
 
-  def encode(query, params, _opts) do
+  def encode(%{param_count: param_count} = query, params, opts) when is_integer(param_count) and param_count > 0 do
+    opts = Utils.default_query_opts(opts)
     {query_part, _post_body_part} = do_parse(query)
-    encoded_params = @codec.encode(query, query_part, params)
+    {query_part, encoded_params} = Values.encode_parameters(query, query_part, params, opts)
 
     HTTPRequest.new()
-    |> HTTPRequest.with_query_string_data(encoded_params)
+    |> HTTPRequest.with_post_data(query_part)
+    |> HTTPRequest.with_query_params(encoded_params)
+    |> HTTPRequest.with_query_in_body()
+  end
+
+  def encode(query, _params, _opts) do
+    HTTPRequest.new()
+    |> HTTPRequest.with_post_data(query.statement)
+    |> HTTPRequest.with_query_in_body()
   end
 
   def decode(_query, result, _opts) do
@@ -88,13 +108,49 @@ defimpl DBConnection.Query, for: Clickhousex.Query do
 
   defp query_type(statement) do
     with {:create, false} <- {:create, Regex.match?(@create_query_regex, statement)},
+         {:insert_select, false} <- {:insert_select, Regex.match?(@insert_select_query_regex, statement)},
          {:select, false} <- {:select, Regex.match?(@select_query_regex, statement)},
          {:insert, false} <- {:insert, Regex.match?(@insert_query_regex, statement)},
-         {:alter, false} <- {:alter, Regex.match?(@alter_query_regex, statement)} do
+         {:alter, false} <- {:alter, Regex.match?(@alter_query_regex, statement)},
+         {:show, false} <- {:show, Regex.match?(@show_query_regex, statement)} do
       :unknown
     else
       {statement_type, true} ->
         statement_type
+    end
+  end
+
+  defp column_count(query, values_part) do
+    trimmed_query = values_part |> String.replace(" ", "") |> String.replace("\n", "")
+
+    if not Regex.match?(@values_parameter_regex, trimmed_query) do
+      raise ArgumentError,
+            "Only spaces, questionmarks, commas and enclosing parantheses are allowed in the VALUES part with parameters"
+    end
+
+    row_lengths =
+      values_part
+      |> String.replace(" ", "")
+      |> String.replace("\n", "")
+      |> String.replace("(", "")
+      |> String.replace(",", "")
+      |> String.split(")", trim: true)
+      |> Enum.map(&String.length/1)
+
+    if row_lengths |> MapSet.new() |> MapSet.size() != 1 do
+      raise ArgumentError, "All rows in the VALUES part have to be of the same length"
+    end
+
+    %{query | column_count: hd(row_lengths)}
+  end
+
+  defp check_parameter_count(%{column_count: nil}, _params) do
+    nil
+  end
+
+  defp check_parameter_count(%{column_count: column_count}, params) do
+    if rem(length(params), column_count) != 0 do
+      raise ArgumentError, "All columns in the VALUES part have to be the same length"
     end
   end
 end
